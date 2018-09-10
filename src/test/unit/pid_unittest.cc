@@ -122,6 +122,10 @@ void setDefaultTestSettings(void) {
     pidProfile->throttle_boost = 0;
     pidProfile->throttle_boost_cutoff = 15;
     pidProfile->iterm_rotation = false;
+    pidProfile->smart_feedforward = false,
+    pidProfile->iterm_relax = ITERM_RELAX_OFF,
+    pidProfile->iterm_relax_cutoff = 11,
+    pidProfile->iterm_relax_type = ITERM_RELAX_SETPOINT,
 
     gyro.targetLooptime = 4000;
 }
@@ -506,6 +510,61 @@ TEST(pidControllerTest, testFeedForward) {
     EXPECT_FLOAT_EQ(0, pidData[FD_PITCH].F);
     EXPECT_FLOAT_EQ(0, pidData[FD_YAW].F);
 
+}
+
+TEST(pidControllerTest, testItermRelax) {
+    resetTest();
+    pidProfile->iterm_relax = ITERM_RELAX_RPY;
+    pidInit(pidProfile);
+    ENABLE_ARMING_FLAG(ARMED);
+    pidStabilisationState(PID_STABILISATION_ON);
+
+    pidController(pidProfile, &rollAndPitchTrims, currentTestTime());
+
+    // Loop 1 - Expecting zero since there is no error
+    EXPECT_FLOAT_EQ(0, pidData[FD_ROLL].P);
+    EXPECT_FLOAT_EQ(0, pidData[FD_PITCH].P);
+    EXPECT_FLOAT_EQ(0, pidData[FD_YAW].P);
+    EXPECT_FLOAT_EQ(0, pidData[FD_ROLL].I);
+    EXPECT_FLOAT_EQ(0, pidData[FD_PITCH].I);
+    EXPECT_FLOAT_EQ(0, pidData[FD_YAW].I);
+    EXPECT_FLOAT_EQ(0, pidData[FD_ROLL].D);
+    EXPECT_FLOAT_EQ(0, pidData[FD_PITCH].D);
+    EXPECT_FLOAT_EQ(0, pidData[FD_YAW].D);
+
+    simulatedSetpointRate[FD_ROLL] = 10;
+    simulatedSetpointRate[FD_PITCH] = -10;
+    simulatedSetpointRate[FD_YAW] = 10;
+    pidController(pidProfile, &rollAndPitchTrims, currentTestTime());
+    ASSERT_NEAR(0.52f, pidData[FD_ROLL].I, calculateTolerance(0.52f));
+    ASSERT_NEAR(-0.65f, pidData[FD_PITCH].I, calculateTolerance(-0.65f));
+    ASSERT_NEAR(0.59f, pidData[FD_YAW].I, calculateTolerance(0.59f));
+
+    // Should stay same when ITERM_RELAX_SETPOINT_THRESHOLD reached
+    simulatedSetpointRate[FD_ROLL] = ITERM_RELAX_SETPOINT_THRESHOLD;
+    simulatedSetpointRate[FD_PITCH] = -ITERM_RELAX_SETPOINT_THRESHOLD;
+    simulatedSetpointRate[FD_YAW] = ITERM_RELAX_SETPOINT_THRESHOLD;
+    pidController(pidProfile, &rollAndPitchTrims, currentTestTime());
+    ASSERT_NEAR(0.52f, pidData[FD_ROLL].I, calculateTolerance(0.52f));
+    ASSERT_NEAR(-0.65f, pidData[FD_PITCH].I, calculateTolerance(-0.65f));
+    ASSERT_NEAR(0.59f, pidData[FD_YAW].I, calculateTolerance(0.59f));
+
+    // Set back sticks
+    simulatedSetpointRate[FD_ROLL] = 20;
+    simulatedSetpointRate[FD_PITCH] = -20;
+    simulatedSetpointRate[FD_YAW] = 20;
+
+    pidProfile->iterm_relax_type = ITERM_RELAX_GYRO,
+    pidInit(pidProfile);
+    pidController(pidProfile, &rollAndPitchTrims, currentTestTime());
+    ASSERT_NEAR(0.52f, pidData[FD_ROLL].I, calculateTolerance(0.52f));
+    ASSERT_NEAR(-0.65f, pidData[FD_PITCH].I, calculateTolerance(-0.65f));
+    ASSERT_NEAR(0.59f, pidData[FD_YAW].I, calculateTolerance(0.59f));
+
+    pidController(pidProfile, &rollAndPitchTrims, currentTestTime());
+    ASSERT_NEAR(0.79f, pidData[FD_ROLL].I, calculateTolerance(0.79f));
+    ASSERT_NEAR(-0.98f, pidData[FD_PITCH].I, calculateTolerance(-0.98f));
+    ASSERT_NEAR(0.88f, pidData[FD_YAW].I, calculateTolerance(0.88));
 }
 
 TEST(pidControllerTest, testDtermFiltering) {

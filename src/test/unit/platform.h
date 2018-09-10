@@ -42,6 +42,9 @@
 #define USE_SERVOS
 #define USE_TRANSPONDER
 
+#define USE_ITERM_RELAX
+#define USE_RC_SMOOTHING_FILTER
+
 typedef enum
 {
     Mode_TEST = 0x0,

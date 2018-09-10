@@ -56,8 +56,6 @@
 #include "sensors/acceleration.h"
 
 
-#define ITERM_RELAX_SETPOINT_THRESHOLD 30.0f
-
 const char pidNames[] =
     "ROLL;"
     "PITCH;"
